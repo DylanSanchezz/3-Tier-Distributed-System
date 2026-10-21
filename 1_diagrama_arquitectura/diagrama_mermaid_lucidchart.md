@@ -1,9 +1,6 @@
 # Diagrama de Arquitectura — Tarea #995
 
-En esta misma carpeta se encuentra el archivo de imagen listo para entregar:
-- **`diagrama_arquitectura_3_capas.jpg`** (Resolución `2000x1350`, formato `.jpg`).
-
-## Código Mermaid (Importable en Lucidchart: *Insert -> Advanced -> Mermaid*)
+## Código Mermaid
 
 ```mermaid
 flowchart TB
