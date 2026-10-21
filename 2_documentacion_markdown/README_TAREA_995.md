@@ -4,8 +4,6 @@
 
 Este proyecto implementa una arquitectura distribuida de **3 capas (Presentación, Aplicación y Datos)** altamente disponible, resiliente y escalable mediante contenedores Docker, balanceadores **HAProxy 3.2** en configuración Maestro/Esclavo, **Keepalived (VRRP)** para IPs virtuales flotantes (VIPs), servidores web **Nginx**, microservicios API en **Node.js**, un clúster **MariaDB Galera** de 3 nodos, caché en **Redis**, almacenamiento documental en **MongoDB** y monitoreo activo en **Nagios Core**.
 
-![Diagrama de Arquitectura](../1_diagrama_arquitectura/diagrama_arquitectura_3_capas.jpg)
-
 ---
 
 ## 2. Componentes por Capa y Direccionamiento de Red
