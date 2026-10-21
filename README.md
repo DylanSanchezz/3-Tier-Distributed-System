@@ -1,6 +1,6 @@
 # 3-Tier Distributed System (High Availability & Resilience)
 
-Sistema distribuido de 3 capas con alta disponibilidad (HA) y resiliencia. Implementa una arquitectura multinodo utilizando **HAProxy**, **Keepalived**, **Galera Cluster (MariaDB)**, **MongoDB**, **Redis** y monitoreo con **Nagios**, validada mediante pruebas de carga (Load Testing) e Ingeniería del Caos (Chaos Engineering)[cite: 1].
+Sistema distribuido de 3 capas con alta disponibilidad (HA) y resiliencia. Implementa una arquitectura multinodo utilizando **HAProxy**, **Keepalived**, **Galera Cluster (MariaDB)**, **MongoDB**, **Redis** y monitoreo con **Nagios**, validada mediante pruebas de carga (Load Testing) e Ingeniería del Caos (Chaos Engineering).
 
 ---
 
