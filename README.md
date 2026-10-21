@@ -14,7 +14,7 @@ Sistema distribuido de 3 capas con alta disponibilidad (HA) y resiliencia. Imple
 ## 📂 Estructura de Entregables por Carpeta
 
 1. 📁 **[1_diagrama_arquitectura](./1_diagrama_arquitectura/)**: Archivos fuente y diseño de la topología del sistema distribuido de 3 capas.
-2. 📁 **[2_documentacion_markdown](./2_documentacion_markdown/)**: Respaldo de la documentación técnica en formato Markdown (`README_TAREA_995.md`)[cite: 1].
+2. 📁 **[2_documentacion_markdown](./2_documentacion_markdown/)**: Respaldo de la documentación técnica en formato Markdown (`README_TAREA_995.md`).
 3. 📁 **[3_archivos_iac_config](./3_archivos_iac_config/)**: Manifiestos, `Dockerfiles`, scripts de automatización y archivos de configuración de los nodos y balanceadores.
 4. 📁 **[4_poc_load_testing](./4_poc_load_testing/)**: Scripts y evidencias de las pruebas de carga y distribución de tráfico.
 5. 📁 **[5_poc_simple_failover](./5_poc_simple_failover/)**: Pruebas de caída controlada y validación de conmutación por error (Failover).
@@ -23,8 +23,8 @@ Sistema distribuido de 3 capas con alta disponibilidad (HA) y resiliencia. Imple
 ---
 
 ## 🛠️ Stack Tecnológico
-* **Balanceo de Carga y Alta Disponibilidad:** HAProxy + Keepalived[cite: 1]
+* **Balanceo de Carga y Alta Disponibilidad:** HAProxy + Keepalived
 * **Capa de Aplicación:** 3 Nodos Web + 3 Nodos API
-* **Capa de Datos y Caché:** MariaDB Galera Cluster (3 nodos), MongoDB, Redis[cite: 1]
+* **Capa de Datos y Caché:** MariaDB Galera Cluster (3 nodos), MongoDB, Redis
 * **Monitoreo:** Nagios
-* **Automatización e IaC:** Docker, PowerShell (85.6%), Dockerfile (13.4%), Shell (1%)[cite: 1]
+* **Automatización e IaC:** Docker, PowerShell (85.6%), Dockerfile (13.4%), Shell (1%)
