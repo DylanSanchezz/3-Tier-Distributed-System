@@ -19,6 +19,8 @@ services:
 
   presentation-lb-backup:
     image: haproxy:3.2-alpine
+    ports:
+      - "8080:80"
     volumes:
       - ./haproxy/presentation-backup.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     restart: unless-stopped
@@ -180,26 +182,52 @@ services:
       application-lb-backup:
         condition: service_started
 
+  database-lb:
+    image: haproxy:3.2-alpine
+    hostname: database-lb
+    ports:
+      - "8404:8404"
+    volumes:
+      - ./haproxy/database-lb.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    restart: unless-stopped
+    depends_on:
+      galera1:
+        condition: service_healthy
+      redis-master:
+        condition: service_healthy
+    networks:
+      database:
+        aliases:
+          - redis
+      observability:
+
   app1:
     build: ./application
     environment: &application-environment
-      DB_HOST: galera1
+      DB_HOST: database-lb
       DB_PORT: 3306
+      DB_WRITE_PORT: 3306
+      DB_READ_PORT: 3307
+      DB_READ_POOL_LIMIT: ${DB_READ_POOL_LIMIT:-5}
+      DB_WRITE_POOL_LIMIT: ${DB_WRITE_POOL_LIMIT:-2}
+      DB_POOL_QUEUE_LIMIT: ${DB_POOL_QUEUE_LIMIT:-50}
       DB_NAME: ${CATALOG_DB_NAME:?Set CATALOG_DB_NAME in .env}
       DB_USER: ${CATALOG_DB_USER:?Set CATALOG_DB_USER in .env}
       DB_PASSWORD: ${CATALOG_DB_PASSWORD:?Set CATALOG_DB_PASSWORD in .env}
-      MONGO_HOST: mongodb
+      MONGO_HOST: mongo1,mongo2,mongo3
       MONGO_PORT: 27017
       MONGO_DB: ${MONGO_DB_NAME:?Set MONGO_DB_NAME in .env}
       MONGO_USER: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME in .env}
       MONGO_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
-      REDIS_HOST: redis
+      REDIS_HOST: database-lb
       REDIS_PORT: 6379
       APPLICATION_NODE: app1
     restart: unless-stopped
     depends_on:
       catalog-init:
         condition: service_completed_successfully
+      database-lb:
+        condition: service_started
     networks:
       - application
       - database
@@ -213,6 +241,8 @@ services:
     depends_on:
       catalog-init:
         condition: service_completed_successfully
+      database-lb:
+        condition: service_started
     networks:
       - application
       - database
@@ -226,6 +256,8 @@ services:
     depends_on:
       catalog-init:
         condition: service_completed_successfully
+      database-lb:
+        condition: service_started
     networks:
       - application
       - database
@@ -238,47 +270,152 @@ services:
       - ./database/catalog.sql:/app/database/catalog.sql:ro
     restart: "no"
     depends_on:
-      galera1:
+      database-lb:
+        condition: service_started
+      mongo1:
         condition: service_healthy
-      mongodb:
-        condition: service_healthy
-      redis:
+      redis-master:
         condition: service_healthy
     networks:
       - database
 
-  mongodb:
+  mongo1:
     image: mongo:8
+    hostname: mongo1
+    command:
+      - sh
+      - -c
+      - |
+        echo "distributedthreetierrs0secretkeyfile995" > /tmp/mongo-keyfile
+        chmod 400 /tmp/mongo-keyfile
+        chown 999:999 /tmp/mongo-keyfile
+        exec docker-entrypoint.sh mongod --replSet rs0 --keyFile /tmp/mongo-keyfile --bind_ip_all
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME in .env}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
     volumes:
-      - mongodb-data:/data/db
+      - mongo1-data:/data/db
+    depends_on:
+      - mongo2
+      - mongo3
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "mongosh --quiet --username \"$${MONGO_INITDB_ROOT_USERNAME}\" --password \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1",
+          "mongosh --quiet --username \"$${MONGO_INITDB_ROOT_USERNAME}\" --password \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval 'try { if (rs.status().ok === 1) { quit(0); } } catch (e) { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo1:27017\", priority: 2}, {_id: 1, host: \"mongo2:27017\", priority: 1}, {_id: 2, host: \"mongo3:27017\", priority: 1}]}); } quit(1);'",
         ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    networks:
+      database:
+        aliases:
+          - mongodb
+
+  mongo2:
+    image: mongo:8
+    hostname: mongo2
+    command:
+      - sh
+      - -c
+      - |
+        echo "distributedthreetierrs0secretkeyfile995" > /tmp/mongo-keyfile
+        chmod 400 /tmp/mongo-keyfile
+        chown 999:999 /tmp/mongo-keyfile
+        exec docker-entrypoint.sh mongod --replSet rs0 --keyFile /tmp/mongo-keyfile --bind_ip_all
+    volumes:
+      - mongo2-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep 1"]
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 30s
+      start_period: 15s
     networks:
       - database
 
-  redis:
+  mongo3:
+    image: mongo:8
+    hostname: mongo3
+    command:
+      - sh
+      - -c
+      - |
+        echo "distributedthreetierrs0secretkeyfile995" > /tmp/mongo-keyfile
+        chmod 400 /tmp/mongo-keyfile
+        chown 999:999 /tmp/mongo-keyfile
+        exec docker-entrypoint.sh mongod --replSet rs0 --keyFile /tmp/mongo-keyfile --bind_ip_all
+    volumes:
+      - mongo3-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks:
+      - database
+
+  redis-master:
     image: redis:7-alpine
+    hostname: redis-master
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-master-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 3s
       retries: 5
     networks:
       - database
 
+  redis-replica:
+    image: redis:7-alpine
+    hostname: redis-replica
+    command: ["redis-server", "--replicaof", "redis-master", "6379", "--replica-read-only", "no", "--appendonly", "yes"]
+    volumes:
+      - redis-replica-data:/data
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - database
+
+  redis-sentinel:
+    image: redis:7-alpine
+    hostname: redis-sentinel
+    command:
+      - sh
+      - -c
+      - |
+        cat <<EOF > /tmp/sentinel.conf
+        port 26379
+        sentinel resolve-hostnames yes
+        sentinel announce-hostnames yes
+        sentinel monitor mymaster redis-master 6379 1
+        sentinel down-after-milliseconds mymaster 3000
+        sentinel failover-timeout mymaster 5000
+        sentinel parallel-syncs mymaster 1
+        EOF
+        exec redis-sentinel /tmp/sentinel.conf
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-replica:
+        condition: service_healthy
+    networks:
+      - database
+
   galera1:
     image: bitnamilegacy/mariadb-galera:11.4.7-debian-12-r3
+    hostname: galera1
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}
       MARIADB_DATABASE: ${CATALOG_DB_NAME:?Set CATALOG_DB_NAME in .env}
@@ -287,6 +424,8 @@ services:
       MARIADB_GALERA_CLUSTER_NAME: distributed-cluster
       MARIADB_GALERA_CLUSTER_ADDRESS: gcomm://galera1,galera2,galera3
       MARIADB_GALERA_CLUSTER_BOOTSTRAP: "yes"
+      MARIADB_GALERA_FORCE_SAFETOBOOTSTRAP: "yes"
+      MARIADB_EXTRA_FLAGS: "--max-connections=300 --wsrep-provider-options=pc.ignore_quorum=true;pc.ignore_sb=true"
       MARIADB_GALERA_MARIABACKUP_USER: mariabackup
       MARIADB_GALERA_MARIABACKUP_PASSWORD: ${MARIADB_BACKUP_PASSWORD:?Set MARIADB_BACKUP_PASSWORD in .env}
     volumes:
@@ -302,11 +441,13 @@ services:
 
   galera2:
     image: bitnamilegacy/mariadb-galera:11.4.7-debian-12-r3
+    hostname: galera2
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}
       MARIADB_GALERA_CLUSTER_NAME: distributed-cluster
       MARIADB_GALERA_CLUSTER_ADDRESS: gcomm://galera1,galera2,galera3
       MARIADB_GALERA_CLUSTER_BOOTSTRAP: "no"
+      MARIADB_EXTRA_FLAGS: "--max-connections=300 --wsrep-provider-options=pc.ignore_quorum=true;pc.ignore_sb=true"
       MARIADB_GALERA_MARIABACKUP_USER: mariabackup
       MARIADB_GALERA_MARIABACKUP_PASSWORD: ${MARIADB_BACKUP_PASSWORD:?Set MARIADB_BACKUP_PASSWORD in .env}
     volumes:
@@ -325,11 +466,13 @@ services:
 
   galera3:
     image: bitnamilegacy/mariadb-galera:11.4.7-debian-12-r3
+    hostname: galera3
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}
       MARIADB_GALERA_CLUSTER_NAME: distributed-cluster
       MARIADB_GALERA_CLUSTER_ADDRESS: gcomm://galera1,galera2,galera3
       MARIADB_GALERA_CLUSTER_BOOTSTRAP: "no"
+      MARIADB_EXTRA_FLAGS: "--max-connections=300 --wsrep-provider-options=pc.ignore_quorum=true;pc.ignore_sb=true"
       MARIADB_GALERA_MARIABACKUP_USER: mariabackup
       MARIADB_GALERA_MARIABACKUP_PASSWORD: ${MARIADB_BACKUP_PASSWORD:?Set MARIADB_BACKUP_PASSWORD in .env}
     volumes:
@@ -348,6 +491,7 @@ services:
 
   nagios:
     image: jasonrivers/nagios:latest
+    command: ["sh", "-c", "rm -rf /var/run/apache2/* /run/apache2/* /opt/nagios/var/nagios.lock && exec /usr/local/bin/start_nagios"]
     ports:
       - "8088:80"
     environment:
@@ -370,12 +514,17 @@ services:
       - app1
       - app2
       - app3
+      - database-lb
       - catalog-init
       - galera1
       - galera2
       - galera3
-      - mongodb
-      - redis
+      - mongo1
+      - mongo2
+      - mongo3
+      - redis-master
+      - redis-replica
+      - redis-sentinel
     networks:
       - edge
       - application
@@ -385,7 +534,11 @@ volumes:
   galera1-data:
   galera2-data:
   galera3-data:
-  mongodb-data:
+  mongo1-data:
+  mongo2-data:
+  mongo3-data:
+  redis-master-data:
+  redis-replica-data:
 
 networks:
   edge:
@@ -399,3 +552,4 @@ networks:
         - subnet: 172.31.0.0/24
   database:
     internal: true
+  observability:
