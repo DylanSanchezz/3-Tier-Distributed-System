@@ -24,3 +24,7 @@ credentials.json
 backups/
 **/backups/
 
+# OS metadata files.
+desktop.ini
+**/desktop.ini
+Thumbs.db

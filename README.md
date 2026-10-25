@@ -1,126 +1,52 @@
-# Distributed three-tier store demo
+# 3-Tier Distributed System — High Availability, Cluster-Aware Routing & Resilience (V2)
 
-The stack serves a static storefront through three Nginx presentation nodes. Its
-Node.js application tier queries a MariaDB Galera cluster for the ten cheapest
-products, caches that list in Redis, and stores product reviews in MongoDB.
-HAProxy instances distribute requests within each tier, and Keepalived provides
-a master/backup virtual IP for each HAProxy pair.
+Sistema distribuido de **3 capas (Presentación, Aplicación y Datos)** en Alta Disponibilidad (HA), Resiliencia y Escalabilidad (**25 contenedores**). Implementa una arquitectura multinodo sin puntos únicos de fallo en datos utilizando **HAProxy 3.2** (incluyendo proxy cluster-aware `database-lb` con *Read/Write Split*), **Keepalived (VRRP VIPs)**, **Nginx (x3)**, **Node.js API (x3)**, **MariaDB Galera Cluster (x3)**, **MongoDB 8 Replica Set `rs0` (x3)**, **Redis 7 HA + Sentinel** y monitoreo activo en **Nagios Core**, validada con el plan integral **[`TEST-PLAN.md`](./TEST-PLAN.md) (Puntos 1 al 5)**.
 
-## Architecture
+![Diagrama de Arquitectura V2](./ENTREGABLES/1_diagrama_arquitectura/diagrama_arquitectura_3_capas.jpg)
 
-```mermaid
-flowchart LR
-    browser[Browser]
+---
 
-    subgraph edge["Presentation tier · edge network"]
-        plbM["HAProxy presentation master<br/>host port 80"]
-        plbB["HAProxy presentation backup"]
-        pka["Keepalived VRRP pair<br/>presentation VIP 172.30.0.250"]
-        web1["Nginx webnode1"]
-        web2["Nginx webnode2"]
-        web3["Nginx webnode3"]
-        plbM --- pka
-        plbB --- pka
-        plbM --> web1
-        plbM --> web2
-        plbM --> web3
-        plbB -. failover .-> web1
-        plbB -. failover .-> web2
-        plbB -. failover .-> web3
-    end
+## 📄 Documentación Principal (Acceso Rápido)
 
-    subgraph appnet["Application tier · internal application network"]
-        albM["HAProxy application master"]
-        albB["HAProxy application backup"]
-        aka["Keepalived VRRP pair<br/>application VIP 172.31.0.250"]
-        app1["API app1"]
-        app2["API app2"]
-        app3["API app3"]
-        albM --- aka
-        albB --- aka
-        albM --> app1
-        albM --> app2
-        albM --> app3
-        albB -. failover .-> app1
-        albB -. failover .-> app2
-        albB -. failover .-> app3
-    end
+* ✅ **[ToDo.md](./ToDo.md)**: Checklist de mejoras arquitectónicas completadas (**MongoDB Replica Set `2.1`**, **Redis HA + Disposable Cache `2.2` y `2.3`**, y **Enrutamiento Cluster-Aware de Galera `3.1–3.4`**).
+* 🧪 **[REPORTE_TEST_PLAN_1_AL_5.md](./ENTREGABLES/7_test_plan_completo/REPORTE_TEST_PLAN_1_AL_5.md)**: Evidencia y resultados reales medidos de los **puntos 1 al 5** de [`TEST-PLAN.md`](./TEST-PLAN.md) (*Baseline, Performance `ab`/`Siege`/`JMeter`, HA Failover, Chaos Engineering y Observabilidad*).
+* 📘 **[README_TAREA_995.md](./ENTREGABLES/2_documentacion_markdown/README_TAREA_995.md)**: Documentación general del entregable, desglose de topología por capa y justificación técnica de diseño.
+* ⚙️ **[EXPLICACION_IAC.md](./ENTREGABLES/3_archivos_iac_config/EXPLICACION_IAC.md)**: Detalle técnico de la Infraestructura como Código (IaC), redes aisladas, *connection pools* y orquestación.
 
-    subgraph data["Data tier · internal database network"]
-        redis[("Redis<br/>catalog cache")]
-        galera1[("MariaDB Galera node 1<br/>catalog queries")]
-        galera2[("MariaDB Galera node 2")]
-        galera3[("MariaDB Galera node 3")]
-        mongo[("MongoDB<br/>product reviews")]
-        galera1 <--> galera2
-        galera2 <--> galera3
-        galera3 <--> galera1
-    end
+---
 
-    browser -->|"HTTP :80"| plbM
-    web1 -->|"API via VIP"| aka
-    web2 -->|"API via VIP"| aka
-    web3 -->|"API via VIP"| aka
-    app1 -->|"cache lookup / invalidate"| redis
-    app2 -->|"cache lookup / invalidate"| redis
-    app3 -->|"cache lookup / invalidate"| redis
-    app1 -->|"cache miss: query catalog"| galera1
-    app2 -->|"cache miss: query catalog"| galera1
-    app3 -->|"cache miss: query catalog"| galera1
-    app1 -->|"read/write reviews"| mongo
-    app2 -->|"read/write reviews"| mongo
-    app3 -->|"read/write reviews"| mongo
-```
+## 📂 Estructura de Entregables por Carpeta ([`ENTREGABLES/`](./ENTREGABLES/))
 
-Product-list requests check Redis first; a cache miss queries MariaDB and then
-populates Redis. Review requests use MongoDB, with MariaDB used to verify the
-product before a review is inserted. In this single-host Compose setup, host
-port 80 is published by the presentation master container; the presentation
-VIP does not move Docker's host-port mapping during failover.
+1. 📁 **[1_diagrama_arquitectura](./ENTREGABLES/1_diagrama_arquitectura/)**: Diagrama de arquitectura V2 en formato `.jpg` (`2100x1420`) y código fuente Mermaid para Lucidchart.
+2. 📁 **[2_documentacion_markdown](./ENTREGABLES/2_documentacion_markdown/)**: Documentación técnica completa del sistema distribuido (`README_TAREA_995.md`).
+3. 📁 **[3_archivos_iac_config](./ENTREGABLES/3_archivos_iac_config/)**: Copia consolidada de manifiestos `docker-compose.yml`, `.env.example`, `haproxy/database-lb.cfg`, `keepalived/`, `nagios/` y `application/`.
+4. 📁 **[4_poc_load_testing](./ENTREGABLES/4_poc_load_testing/)**: Pruebas de rendimiento (`Smoke`, `Load`, `Stress`, `Spike`, comparativa Con/Sin Caché Redis y capacidad por capa) con ApacheBench (`ab`) y Siege.
+5. 📁 **[5_poc_simple_failover](./ENTREGABLES/5_poc_simple_failover/)**: Pruebas de conmutación automática en VIPs Keepalived, caída de `galera1`, caída de `redis-master` (y apagado total de Redis) y elección primaria en MongoDB `rs0` al caer `mongo1`.
+6. 📁 **[6_poc_chaos_monkey](./ENTREGABLES/6_poc_chaos_monkey/)**: Experimentos de Ingeniería del Caos (falla compuesta de 9 contenedores simultáneos bajo carga + recuperación total en frío + script `chaos-monkey-aleatorio.ps1`).
+7. 📁 **[7_test_plan_completo](./ENTREGABLES/7_test_plan_completo/)**: Reporte maestro de los puntos 1 al 5 del `TEST-PLAN.md` y archivo ejecutable de Apache JMeter (`test-plan-tarea995.jmx`).
 
-## Run locally
+---
 
-1. Copy `.env.example` to `.env` and replace the example passwords.
-2. Start the stack with `docker compose up --build`.
-3. Open `http://localhost/` for the storefront and
-   `http://localhost:8088/` for Nagios.
+## 🚀 Ejecución Rápida en Local
 
-The product endpoint is `http://localhost/api/products/cheapest`; it returns
-JSON sorted by ascending price. The storefront calls this endpoint and renders
-the returned products. Schema creation and sample data insertion are
-idempotently performed by the `catalog-init` service after the first Galera
-node is healthy.
+1. Copiar variables de entorno:
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+2. Construir y levantar los 25 contenedores:
+   ```powershell
+   docker compose up --build -d
+   ```
+3. Accesos en el navegador:
+   * **Tienda Principal (VIP Presentación):** `http://localhost` *(Ruta directa backup: `http://localhost:8080`)*
+   * **Health & Routing JSON:** `http://localhost/api/health`
+   * **Tablero en Vivo HAProxy DB & Redis (`database-lb`):** `http://localhost:8404/stats`
+   * **Nagios Core (19 Hosts / 19 Services, Hard State <= 1 min):** `http://localhost:8088/nagios` *(usuario: `nagiosadmin` / pass en `.env`)*
 
-The storefront also displays a live request pipeline for its product and
-review API requests. The API's `X-Request-Trace` response header records the
-presentation load balancer, selected web node, application load balancer,
-application node, and the actual data stores touched by that request.
-The storefront API explorer menu can query `/`, `/health`,
-`/products/cheapest`, and `/products/ST-001/reviews`.
+---
 
-Use the storefront's API explorer menu to query the product, review, service
-information, and health endpoints. Its **Clear Redis catalog cache** button
-calls `POST /api/cache/clear`, which deletes only the cheapest-products cache
-entry; the next catalog request refills it from MariaDB.
-
-The application uses Redis to cache the cheapest-products response for 60
-seconds. MongoDB stores product reviews: use
-`GET /api/products/ST-001/reviews` to read reviews or send JSON such as
-`{"reviewer":"Taylor","rating":5,"comment":"Great bag."}` to
-`POST /api/products/ST-001/reviews` to add one. The initialization service
-creates the review index and inserts sample reviews idempotently. MongoDB and
-Redis are private to the database network and are not published on host ports.
-
-## Load-balancer failover
-
-The presentation VIP is `172.30.0.250` and the application VIP is
-`172.31.0.250`. Each Keepalived pair shares its HAProxy container's network
-namespace, uses unicast VRRP, and tracks the local HAProxy listener. Application
-requests from Nginx use the floating application VIP.
-
-Compose publishes host port 80 on the presentation master container. Docker's
-published-port mapping targets that specific container, so on a single-host
-Compose deployment the VIP failover does not move the host port mapping. The
-presentation VIP is available to other containers on the edge network; expose
-it through a host/network setup that supports floating VIPs if host-level
-failover is required.
+## 🛠️ Stack Tecnológico
+* **Balanceo de Carga y Alta Disponibilidad:** HAProxy 3.2 + Keepalived (VRRP Unicast VIPs `172.30.0.250` y `172.31.0.250`) + `database-lb` Cluster-Aware Proxy
+* **Capa de Presentación y Aplicación:** 3 Nodos Web (Nginx Alpine) + 3 Nodos API (Node.js 22 con `readPool` `:3307` y `writePool` `:3306` acotados)
+* **Capa de Datos sin SPOF:** MariaDB Galera Cluster 11.4 (3 nodos), MongoDB 8 Replica Set `rs0` (3 nodos), Redis 7 Master-Replica + Sentinel HA
+* **Observabilidad y Pruebas:** Nagios Core 4.5, HAProxy Stats UI, ApacheBench (`ab`), Siege, Apache JMeter y Chaos Monkey
